@@ -4,6 +4,7 @@
 import pygame
 import random
 import time
+from pygame.draw import rect
 
 from pygame.locals import (
     RLEACCEL,
@@ -25,13 +26,9 @@ death_sound = pygame.mixer.Sound("Pacman-death-sound.mp3")
 # Initialize pygame
 pygame.init()
 
-# Constants for screen width and screen height
-SCREEN_WIDTH = 800
-SCREEN_HEIGHT = 800
-
 # Note Pacman height and width must be the same
 # Note pacman height must be divisible by both screen width and height
-PACMAN_HEIGHT = 40
+PACMAN_HEIGHT = 41
 PACMAN_WIDTH = PACMAN_HEIGHT
 
 # Note Pacman height and width must be the same
@@ -39,9 +36,23 @@ PACMAN_WIDTH = PACMAN_HEIGHT
 GHOST_HEIGHT = PACMAN_HEIGHT
 GHOST_WIDTH = GHOST_HEIGHT
 
+# Constants for obstruction width and screen height
+OBSTRUCTION_HEIGHT = PACMAN_HEIGHT
+OBSTRUCTION_WIDTH = OBSTRUCTION_HEIGHT
+
+# Number of Pacman's in each row
+PACMAN_PER_ROW = 20
+PACMAN_PER_COL = PACMAN_PER_ROW
+
+# Constants for screen width and screen height
+SCREEN_WIDTH = PACMAN_HEIGHT*PACMAN_PER_ROW
+SCREEN_HEIGHT = SCREEN_WIDTH
+
 # Total number of food rows and columns
 FOOD_COLUMNS = SCREEN_WIDTH//PACMAN_WIDTH
 FOOD_ROWS = SCREEN_HEIGHT//PACMAN_HEIGHT
+FOOD_HEIGHT = 5
+FOOD_WIDTH = FOOD_HEIGHT
 
 # Total number of ghost per game
 GHOSTS_PER_GAME = 5
@@ -54,7 +65,7 @@ class Pacman(pygame.sprite.Sprite):
     and initialze the pacman
     """
 
-    def __init__(self):
+    def __init__(self, obstruction_location_map):
         """ Initialize the Pacman graphical representation """
         super(Pacman, self).__init__() #RRM - need to understand why we pass self to super
         self.picture = pygame.image.load("Pacman_image_HD.png").convert()
@@ -63,17 +74,52 @@ class Pacman(pygame.sprite.Sprite):
         # Color key is set as white. (If image was white, it would have a box around it to avoid blend)
         self.surf.set_colorkey((255,255,255),RLEACCEL)
         self.rect = self.surf.get_rect()
+        self.obstruction_location_map = obstruction_location_map
+        self.move = True
 
     def update(self, key_pressed):
         """ Method that moves the Pacman around through the game window """
         if(key_pressed[K_UP]):
-            self.rect.move_ip(0,-5)
+            # Check if an up press results in the Pacman
+            # aligning with an onstruction block
+            # If so, dont move the Pacman
+            self.move = True
+            for obstruction in self.obstruction_location_map:
+                if(obstruction.rect.left == self.rect.left) and \
+                (obstruction.rect.bottom == self.rect.top):
+                    self.move = False
+        
+            if self.move : self.rect.move_ip(0,-PACMAN_HEIGHT)
+
         if(key_pressed[K_DOWN]):
-            self.rect.move_ip(0,5)
+
+            self.move = True
+            for obstruction in self.obstruction_location_map:
+                if(obstruction.rect.left == self.rect.left) and \
+                (obstruction.rect.top == self.rect.bottom):
+                    self.move = False
+
+            if self.move : self.rect.move_ip(0,PACMAN_HEIGHT)
+
         if(key_pressed[K_LEFT]):
-            self.rect.move_ip(-5,0)
+
+            self.move = True
+            for obstruction in self.obstruction_location_map:
+                if(obstruction.rect.top == self.rect.top) and \
+                (obstruction.rect.right == self.rect.left):
+                    self.move = False            
+            
+            if self.move : self.rect.move_ip(-PACMAN_WIDTH,0)
+
         if(key_pressed[K_RIGHT]):
-            self.rect.move_ip(5,0)
+
+            self.move = True
+            for obstruction in self.obstruction_location_map:
+                if(obstruction.rect.top == self.rect.top) and \
+                (obstruction.rect.left == self.rect.right):
+                    self.move = False            
+
+            if self.move : self.rect.move_ip(PACMAN_WIDTH,0)
 
         if self.rect.left <= 0:
             self.rect.left = 0
@@ -117,7 +163,7 @@ class Ghost(pygame.sprite.Sprite):
 
     def update(self):
         """ Method that moves the Ghost around through the game window """
-        if (self.counter == 40):
+        if (self.counter == 7):
             self.counter = 0
         else:
             self.counter+=1
@@ -127,13 +173,17 @@ class Ghost(pygame.sprite.Sprite):
 
         # Update direction of the ghost randomly
         if(self.random_direction == 0):
-            self.rect.move_ip(0,-5)
+            # Move up
+            self.rect.move_ip(0,-GHOST_HEIGHT)
         if(self.random_direction == 1):
-            self.rect.move_ip(0,5)
+            # Move down
+            self.rect.move_ip(0,GHOST_HEIGHT)
         if(self.random_direction == 2):
-            self.rect.move_ip(-5,0)
+            # Move left
+            self.rect.move_ip(-GHOST_WIDTH,0)
         if(self.random_direction == 3):
-            self.rect.move_ip(5,0)
+            # Move right
+            self.rect.move_ip(GHOST_WIDTH,0)
 
         if self.rect.left <= 0:
             self.rect.left = 0
@@ -160,39 +210,76 @@ class Food(pygame.sprite.Sprite):
         """ Initialize the size and position of the food item """
         super(Food, self).__init__()        
         # Size of the food item
-        self.surf = pygame.Surface((5,5))
+        self.surf = pygame.Surface((FOOD_WIDTH,FOOD_HEIGHT))
         self.surf.fill((255,255,255))
         self.rect = self.surf.get_rect()
         # Define the position of each food item
-        self.rect.left = (PACMAN_WIDTH*food_y_cnt) + PACMAN_WIDTH//2
-        self.rect.top = (PACMAN_HEIGHT*food_x_cnt) + PACMAN_HEIGHT//2
+        self.rect.left = (PACMAN_WIDTH*food_y_cnt) + (PACMAN_WIDTH-FOOD_WIDTH)//2
+        self.rect.top = (PACMAN_HEIGHT*food_x_cnt) + (PACMAN_HEIGHT-FOOD_HEIGHT)//2
 
 ################################################################################
+class Obstruction(pygame.sprite.Sprite):
+    """A class that creates an onstruction for the Pacman"""
+    def __init__(self,x_cnt, y_cnt):
+        super(Obstruction,self).__init__()
+        self.surf = pygame.Surface((OBSTRUCTION_WIDTH, OBSTRUCTION_HEIGHT))
+        self.surf.fill((15,15,240))
+        self.rect = self.surf.get_rect()
+        self.rect.left = (OBSTRUCTION_WIDTH*x_cnt)
+        self.rect.top = (OBSTRUCTION_HEIGHT*y_cnt)
+
+# ################################################################################
+# class Obstruction_collision():
+#     """ This class takes in the obstruction location map and blocks an object trying
+#     to move into an obstruction """
+#     def __init__(self):
+#         pass
+
+    
+#     def check_bump_into_obstruction(moving_object,
+#                                     obstruction_location_map,
+#                                     motion_direction):
+#         """This function takes an objects position, intended direction of motion
+#         and obstruction location map and returns False if a objects intended
+#         motion will result in a collision"""
+
+# ################################################################################
+
 # Main code
 
 # Set 2-D game screen
 screen = pygame.display.set_mode((SCREEN_WIDTH,SCREEN_HEIGHT))
 
-# Instantiate the Pac-Man
-pacman = Pacman()
-
+# Sprite groups
 # Creating a sprite group for ghosts
 ghost_group = pygame.sprite.Group()
-
 # Creating a sprite group for food collection
 food_collection = pygame.sprite.Group()
-
 # Creating an all sprites group
 all_sprites = pygame.sprite.Group()
+# Creating an all obstruction group
+obstruction_group = pygame.sprite.Group()
 
-all_sprites.add(pacman)
-
+# RRM - maybe food wants obstruction info as well
+# So that food is not placed there
 for x in range(FOOD_ROWS):
     for y in range(FOOD_COLUMNS):
         # Istantiate the food
         food = Food(x,y)
         food_collection.add(food)
         all_sprites.add(food)
+
+#RRM fixme - This is meant to mimic the number of blocks
+# that are an obstruction to the Pacman
+for _ in range(100):
+    obstruction = Obstruction(random.randrange(1,PACMAN_PER_ROW),random.randrange(1,PACMAN_PER_COL))
+    all_sprites.add(obstruction)
+    obstruction_group.add(obstruction)
+
+# Instantiate the Pac-Man
+pacman = Pacman(obstruction_group)
+
+all_sprites.add(pacman)
 
 for _ in range(GHOSTS_PER_GAME):
     # Instantiate ghosts
@@ -253,11 +340,10 @@ while running:
     pygame.display.flip()
 
     # Game is configured to 30 frames
-    clock.tick(60)
+    clock.tick(15)
 
 pygame.quit()
 
 
-# 10/05
-# Add walls 
-# Pacman cant cross walls
+# 10/07
+# Ghosts cant cross obstructions
